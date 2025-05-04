@@ -55,7 +55,8 @@ func main() {
 		log.Fatalf("config error: %v", err)
 	}
 
-	fmt.Printf("[NOC2GO]   HTTPS  : https://localhost:%d\n", cfg.Server.Port)
+	ip := firstNonLoopbackIP()
+	fmt.Printf("[NOC2GO]   HTTPS  : https://%s:%d\n", ip, cfg.Server.Port)
 	if !confExists {
 		fmt.Printf("[NOC2GO]   LOGIN  : admin / %s\n", *password)
 	} else {
@@ -332,6 +333,24 @@ func ternary(cond bool, a, b string) string {
 		return a
 	}
 	return b
+}
+
+// firstNonLoopbackIP returns the first active, non‑loopback IPv4 address.
+// Falls nichts gefunden wird, kommt „localhost“ zurück.
+func firstNonLoopbackIP() string {
+	ifaces, _ := net.Interfaces()
+	for _, ifc := range ifaces {
+		if ifc.Flags&net.FlagUp == 0 || ifc.Flags&net.FlagLoopback != 0 {
+			continue
+		}
+		addrs, _ := ifc.Addrs()
+		for _, a := range addrs {
+			if ipnet, ok := a.(*net.IPNet); ok && ipnet.IP.To4() != nil {
+				return ipnet.IP.String()
+			}
+		}
+	}
+	return "localhost"
 }
 
 // ---------- end of main.go ----------
