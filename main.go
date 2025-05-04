@@ -73,9 +73,59 @@ func main() {
 		log.Fatalf("config error: %v", err)
 	}
 
-	// if CLI dns-server flags provided, append them to existing custom servers
+	// if CLI dns-server flags provided, dedupe and append them to existing custom servers
 	if len(dnsServersFlag) > 0 {
-		cfg.DNS.CustomServers = append(cfg.DNS.CustomServers, dnsServersFlag...)
+		// Deduplicate CLI-provided DNS servers, but only for those using port 53
+		// 1) Record existing port-53 servers
+		existing53 := make(map[string]bool)
+		for _, srv := range cfg.DNS.CustomServers {
+			if !strings.Contains(srv, ":") {
+				existing53[srv+":53"] = true
+			} else {
+				parts := strings.Split(srv, ":")
+				host := strings.Join(parts[:len(parts)-1], ":")
+				port := parts[len(parts)-1]
+				if port == "53" {
+					existing53[host+":53"] = true
+				}
+			}
+		}
+		// 2) Deduplicate within CLI flags and against existing
+		cli53Seen := make(map[string]bool)
+		cliNon53Seen := make(map[string]bool)
+		var toAdd []string
+		for _, srv := range dnsServersFlag {
+			if !strings.Contains(srv, ":") {
+				// Implicit port 53
+				norm := srv + ":53"
+				if existing53[norm] || cli53Seen[norm] {
+					continue
+				}
+				cli53Seen[norm] = true
+				toAdd = append(toAdd, norm)
+			} else {
+				parts := strings.Split(srv, ":")
+				host := strings.Join(parts[:len(parts)-1], ":")
+				port := parts[len(parts)-1]
+				if port == "53" {
+					// Explicit port 53
+					norm := host + ":53"
+					if existing53[norm] || cli53Seen[norm] {
+						continue
+					}
+					cli53Seen[norm] = true
+					toAdd = append(toAdd, norm)
+				} else {
+					// Non-53 port: only dedupe exact repeats in the CLI list
+					if cliNon53Seen[srv] {
+						continue
+					}
+					cliNon53Seen[srv] = true
+					toAdd = append(toAdd, srv)
+				}
+			}
+		}
+		cfg.DNS.CustomServers = append(cfg.DNS.CustomServers, toAdd...)
 		if err := saveConfig(*cfgPath, cfg); err != nil {
 			log.Fatalf("cannot save config: %v", err)
 		}
