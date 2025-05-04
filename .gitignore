@@ -24,7 +24,12 @@ go.work.sum
 # env file
 .env
 
+# VS-Code folder
+.vscode/
+
 # noc2go files
 noc2go.key
 noc2go.pem
 noc2go.yaml
+noc2go
+noc2go.exe
