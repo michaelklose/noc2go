@@ -178,6 +178,7 @@
               <th class="nowrap">IP</th>
               <th class="nowrap">TTL</th>
               <th class="nowrap">Time (ms)</th>
+              <th>Status</th>
               <th>Timestamp</th>
             </tr>
           </thead>
@@ -253,13 +254,14 @@
           es.addEventListener("reply", (e) => {
             const d = JSON.parse(e.data);
             const tr = document.createElement("tr");
-            tr.innerHTML = `<td class="nowrap">${
-              d.seq
-            }</td><td class="nowrap">${d.ip}</td><td class="nowrap">${
-              d.ttl
-            }</td><td class="nowrap">${d.time.toFixed(3)}</td><td>${
-              d.timestamp
-            }</td>`;
+            tr.innerHTML = [
+              `<td class="nowrap">${d.seq}</td>`,
+              `<td class="nowrap">${d.ip}</td>`,
+              `<td class="nowrap">${d.ttl}</td>`,
+              `<td class="nowrap">${d.time >= 0 ? d.time.toFixed(3) : ""}</td>`,
+              `<td class="nowrap">${d.status}</td>`,
+              `<td>${d.timestamp}</td>`,
+            ].join("");
             tbody.appendChild(tr);
           });
           es.addEventListener("summary", (e) => {
