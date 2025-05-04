@@ -1,7 +1,6 @@
-<p align="center">
-  <!-- Feel free to replace this with a real banner later on -->
+<!-- <p align="center">
   <img src="https://raw.githubusercontent.com/michaelklose/noc2go/main/.github/banner.png" alt="noc2go banner" width="500"/>
-</p>
+</p> -->
 
 <h1 align="center">NOC2GO</h1>
 <p align="center"><em>Your friendly Swiss‑Army NOC toolkit—everything you need for quick diagnostics in one tiny, cross‑platform Go binary.</em></p>
@@ -121,4 +120,3 @@ See the [LICENSE](LICENSE) file for the full text.
 <p align="center">
   Made with ❤️ and <code>go run .</code> by <a href="https://github.com/michaelklose">Michael</a>
 </p>
-```
