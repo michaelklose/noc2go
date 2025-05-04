@@ -1,0 +1,182 @@
+{{ define "ping.html" }}
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+body { font-family: sans-serif; margin: 0; padding: 2rem; position: relative; }
+.container { max-width: 600px; margin: auto; }
+.actions { position: absolute; top: 1rem; right: 1rem; display: flex; gap: .5rem; }
+.actions button { min-width: 120px; width: auto; }
+header { margin-bottom: 1.5rem; }
+.card { background: #fff; padding: 1.5rem; border-radius: 12px; box-shadow: 0 4px 14px rgba(0,0,0,.1); }
+label { display: block; margin-top: .5rem; font-weight: 500; }
+input, select { display: block; width: 100%; box-sizing: border-box; padding: .6rem .8rem; margin: .4rem 0; border: 1px solid #d1d5db; border-radius: 6px; font-size: 1rem; }
+button { padding: 6px 12px; border: none; border-radius: 6px; background: #2563eb; color: #fff; cursor: pointer; }
+.table-wrapper { overflow-x: auto; margin-top: 1rem; }
+table { border-collapse: collapse; width: 100%; table-layout: auto; }
+th.nowrap, td.nowrap { white-space: nowrap; }
+th, td { border: 1px solid #ccc; padding: 4px 8px; text-align: left; }
+th { background: #f8f8f8; }
+.err { color: #dc2626; margin-top: .5rem; }
+.info { color: #2563eb; margin-top: .5rem; }
+.summary { margin-top: 1rem; font-weight: 500; }
+.saved-list { margin-top: .5rem; }
+.saved-item { display: inline-block; padding: .3rem .5rem; margin: .2rem; background: #f3f4f6; border-radius: 4px; cursor: pointer; }
+.checkbox-label { display: flex; align-items: center; margin-top: .5rem; }
+.checkbox-label input { width: auto; margin-right: .5rem; }
+  </style>
+  <title>NOC2GO - Ping</title>
+</head>
+<body>
+
+  <div class="actions">
+    <form action="/" method="get"><button>Back</button></form>
+    <form action="/logout" method="post"><button>Logout</button></form>
+  </div>
+
+  <div class="container">
+    <header>
+      <h1>NOC2GO – Ping</h1>
+    </header>
+
+    <div class="card">
+      {{ if not .Privileged }}
+        <div class="info">Running in non-privileged mode: raw sockets unavailable; fallback to system ping. Limitations may apply.</div>
+      {{ end }}
+
+      <label for="target">Target (hostname or IP)</label>
+      <input id="target" placeholder="e.g. example.com or 8.8.8.8">
+
+      <div class="saved-list">
+        Saved targets:
+        {{ range .Targets }}
+          <span class="saved-item" data-target="{{ . }}">{{ . }}</span>
+        {{ end }}
+      </div>
+      <button id="save-btn" type="button">Save Target</button>
+
+      <label>IP Version</label>
+      <select id="family">
+        <option value="auto" selected>Auto</option>
+        <option value="ipv4">IPv4</option>
+        <option value="ipv6">IPv6</option>
+      </select>
+
+      <label for="count">Count</label>
+      <input id="count" type="number" min="1" value="4">
+
+      <label for="size">Packet Size (bytes)</label>
+      <input id="size" type="number" min="32" max="65535" value="64">
+
+      <label for="interval">Interval (seconds)</label>
+      <input id="interval" type="number" step="0.1" min="0.1" value="1">
+
+      <label for="ttl">TTL</label>
+      <input id="ttl" type="number" min="1" max="255" value="64">
+
+      <label class="checkbox-label"><input id="df" type="checkbox"> Don't Fragment (IPv4 only)</label>
+
+      <button id="start-btn">Start Ping</button>
+      <div id="error" class="err"></div>
+    </div>
+
+    <div class="table-wrapper">
+      <table id="result-table">
+        <thead>
+          <tr>
+            <th class="nowrap">Seq</th>
+            <th class="nowrap">IP</th>
+            <th class="nowrap">TTL</th>
+            <th class="nowrap">Time (ms)</th>
+            <th>Timestamp</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+    <div class="summary" id="summary"></div>
+  </div>
+
+  <script>
+(function(){
+  const targetInput = document.getElementById('target');
+  const saveBtn     = document.getElementById('save-btn');
+  const familySel   = document.getElementById('family');
+  const countInput  = document.getElementById('count');
+  const sizeInput   = document.getElementById('size');
+  const intervalInput = document.getElementById('interval');
+  const ttlInput      = document.getElementById('ttl');
+  const dfInput       = document.getElementById('df');
+  const startBtn    = document.getElementById('start-btn');
+  const errDiv      = document.getElementById('error');
+  const tbody       = document.querySelector('#result-table tbody');
+  const summaryDiv  = document.getElementById('summary');
+  const savedItems  = document.querySelectorAll('.saved-item');
+  let es;
+
+  // Clicking a saved target
+  savedItems.forEach(el => {
+    el.addEventListener('click', () => {
+      targetInput.value = el.dataset.target;
+    });
+  });
+
+  // Save target
+  saveBtn.addEventListener('click', async () => {
+    const tgt = targetInput.value.trim();
+    if (!tgt) return;
+    const res = await fetch('/api/ping/save', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({target:tgt})
+    });
+    const data = await res.json();
+    if (data.success) {
+      location.reload();
+    }
+  });
+
+  // Start streaming ping
+  startBtn.addEventListener('click', () => {
+    const tgt = targetInput.value.trim();
+    if (!tgt) { errDiv.textContent = 'Target required'; return; }
+    errDiv.textContent = '';
+    tbody.innerHTML = '';
+    summaryDiv.textContent = '';
+
+    const params = new URLSearchParams({
+      target: tgt,
+      family: familySel.value,
+      count: countInput.value,
+      size: sizeInput.value,
+      interval: intervalInput.value,
+      ttl: ttlInput.value,
+      df: dfInput.checked
+    });
+    if (es) es.close();
+
+    es = new EventSource('/api/ping?' + params.toString());
+    es.addEventListener('reply', e => {
+      const d = JSON.parse(e.data);
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td class="nowrap">${d.seq}</td><td class="nowrap">${d.ip}</td><td class="nowrap">${d.ttl}</td><td class="nowrap">${d.time.toFixed(3)}</td><td>${d.timestamp}</td>`;
+      tbody.appendChild(tr);
+    });
+    es.addEventListener('summary', e => {
+      const d = JSON.parse(e.data);
+      summaryDiv.textContent =
+        `Sent=${d.sent} Recv=${d.recv} Loss=${d.loss}% Min=${d.min} Avg=${d.avg} Max=${d.max}`;
+      es.close();
+    });
+    es.onerror = () => {
+      errDiv.textContent = 'Error in ping stream';
+      es.close();
+    };
+  });
+})();
+  </script>
+</body>
+</html>
+{{ end }}

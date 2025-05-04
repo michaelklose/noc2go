@@ -24,6 +24,9 @@ var (
 	privileged = flag.Bool("privileged", false, "enable raw-socket features (requires root/admin)")
 
 	templates = template.Must(template.ParseGlob("templates/*.html"))
+
+	// new global for ping privilege
+	isPrivileged bool
 )
 
 // multiFlag allows repeated --dns-server flags
@@ -61,6 +64,7 @@ func (fw *filterWriter) Write(p []byte) (n int, err error) {
 func main() {
 	flag.Var(&dnsServersFlag, "dns-server", "DNS server to use (can specify multiple times, format IP or IP[:port])")
 	flag.Parse()
+	isPrivileged = *privileged
 
 	port := choosePort(*portFlag)
 	confExists := fileExists(*cfgPath)
@@ -129,7 +133,7 @@ func main() {
 	} else {
 		fmt.Printf("[NOC2GO]   LOGIN  : use credentials from %s\n", *cfgPath)
 	}
-	fmt.Printf("[NOC2GO]   MODE   : %s\n\n", ternary(*privileged, "privileged", "user"))
+	fmt.Printf("[NOC2GO]   MODE   : %s\n\n", ternary(isPrivileged, "privileged", "user"))
 
 	if !fileExists(certFile) || !fileExists(keyFile) {
 		if err := generateSelfSigned(certFile, keyFile); err != nil {
@@ -146,10 +150,15 @@ func main() {
 	mux.HandleFunc("/dns", dnsPageHandler(cfg))
 	mux.HandleFunc("/api/dns", apiDNSHandler)
 
-	// settings endpoints (handlers in settings.go)
+	// settings endpoints
 	mux.HandleFunc("/settings", settingsPageHandler(cfg))
 	mux.HandleFunc("/api/settings/dns/add", apiAddDNSServerHandler(cfg))
 	mux.HandleFunc("/api/settings/dns/remove", apiRemoveDNSServerHandler(cfg))
+
+	// new Ping page and APIs
+	mux.HandleFunc("/ping", pingPageHandler(cfg))
+	mux.HandleFunc("/api/ping", apiPingHandler)
+	mux.HandleFunc("/api/ping/save", apiSavePingTargetHandler(cfg))
 
 	handler := authMiddleware(mux, cfg)
 

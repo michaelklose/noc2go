@@ -37,6 +37,10 @@ type Config struct {
 	DNS struct {
 		CustomServers []string `yaml:"custom_servers"`
 	} `yaml:"dns,omitempty"`
+	// New Ping targets list
+	Ping struct {
+		Targets []string `yaml:"targets,omitempty"`
+	} `yaml:"ping,omitempty"`
 }
 
 func defaultConfig(port int, pw string) *Config {
