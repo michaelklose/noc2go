@@ -73,6 +73,7 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/login", handleLogin(cfg))
 	mux.HandleFunc("/logout", handleLogout())
+	mux.HandleFunc("/passwd", handleChangePassword(cfg)) // <‑‑ diese Zeile neu
 	mux.HandleFunc("/", rootHandler)
 
 	handler := authMiddleware(mux, cfg)
@@ -237,7 +238,11 @@ func rootHandler(w http.ResponseWriter, r *http.Request) {
     pre{background:#fafafa;border:1px solid #eee;padding:8px;overflow:auto;white-space:pre-wrap;}
     </style>`)
 
-	fmt.Fprint(bw, `<header><h1>NOC2GO – System Info</h1><form action="/logout" method="post"><button>Logout</button></form></header>`)
+	fmt.Fprint(bw, `<header><h1>NOC2GO – System Info</h1>
+    <div style="margin-left:auto;display:flex;gap:.5rem">
+        <form action="/passwd" method="get"><button>Change&nbsp;Password</button></form>
+        <form action="/logout" method="post"><button>Logout</button></form>
+    </div></header>`)
 
 	// Basic
 	fmt.Fprintf(bw, `<table><tr><th>Hostname</th><td>%s</td></tr>`, info.Hostname)
