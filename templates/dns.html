@@ -1,0 +1,158 @@
+{{ define "dns.html" }}
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+body {
+  font-family: sans-serif;
+  margin: 0;
+  padding: 2rem;
+  position: relative;
+}
+.container {
+  max-width: 600px;
+  margin: auto;
+}
+.actions {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  display: flex;
+  gap: .5rem;
+}
+.actions button {
+  min-width: 120px;
+  width: auto;
+}
+header {
+  margin-bottom: 1.5rem;
+}
+.card {
+  background: #fff;
+  padding: 1.5rem;
+  border-radius: 12px;
+  box-shadow: 0 4px 14px rgba(0,0,0,.1);
+}
+input, select {
+  width: 100%;
+  padding: .6rem .8rem;
+  margin: .4rem 0;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 1rem;
+}
+button {
+  padding: 6px 12px;
+  border: none;
+  border-radius: 6px;
+  background: #2563eb;
+  color: #fff;
+  cursor: pointer;
+}
+table {
+  border-collapse: collapse;
+  margin-top: 1rem;
+  width: 100%;
+}
+td, th {
+  border: 1px solid #ccc;
+  padding: 4px 8px;
+  text-align: left;
+}
+th {
+  background: #f8f8f8;
+}
+.err {
+  color: #dc2626;
+  margin-top: .5rem;
+}
+  </style>
+  <title>NOC2GO - DNS Lookup</title>
+</head>
+<body>
+
+  <div class="actions">
+    <form action="/" method="get"><button>Back</button></form>
+    <form action="/logout" method="post"><button>Logout</button></form>
+  </div>
+
+  <div class="container">
+    <header>
+      <h1>NOC2GO – DNS Lookup</h1>
+    </header>
+
+    <div class="card">
+      <form id="dns-form">
+        <input id="hostname" placeholder="Hostname (e.g. example.com)" required>
+        <select id="record-type">
+          <option>A</option><option>AAAA</option><option>MX</option>
+          <option>NS</option><option>PTR</option><option>TXT</option><option>SRV</option>
+        </select>
+        <button type="submit">Resolve</button>
+      </form>
+      <div id="error" class="err"></div>
+      <table id="result-table"></table>
+    </div>
+  </div>
+
+  <script>
+    document.getElementById("dns-form").addEventListener("submit", async e => {
+      e.preventDefault();
+      const name = document.getElementById("hostname").value;
+      const type = document.getElementById("record-type").value;
+      const errDiv = document.getElementById("error");
+      const table = document.getElementById("result-table");
+      errDiv.textContent = "";
+      table.innerHTML = "";
+
+      const res = await fetch(`/api/dns?name=${encodeURIComponent(name)}&type=${encodeURIComponent(type)}`);
+      const data = await res.json();
+      if (data.error) {
+        errDiv.textContent = data.error;
+        return;
+      }
+      // build headers based on type
+      let cols;
+      switch(type) {
+        case "A":
+        case "AAAA":
+          cols = ["address"];
+          break;
+        case "MX":
+          cols = ["host","priority"];
+          break;
+        case "NS":
+        case "PTR":
+          cols = ["host"];
+          break;
+        case "TXT":
+          cols = ["text"];
+          break;
+        case "SRV":
+          cols = ["target","port","priority","weight"];
+          break;
+      }
+      // header row
+      const thead = document.createElement("tr");
+      cols.forEach(c => {
+        const th = document.createElement("th");
+        th.textContent = c;
+        thead.appendChild(th);
+      });
+      table.appendChild(thead);
+      // data rows
+      data.records.forEach(rec => {
+        const tr = document.createElement("tr");
+        cols.forEach(c => {
+          const td = document.createElement("td");
+          td.textContent = rec[c] ?? "";
+          tr.appendChild(td);
+        });
+        table.appendChild(tr);
+      });
+    });
+  </script>
+</body>
+</html>
+{{ end }}

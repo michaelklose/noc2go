@@ -1,0 +1,80 @@
+{{ define "index.html" }}
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+body {
+  font-family: sans-serif;
+  margin: 0;
+  padding: 2rem;
+  position: relative;
+}
+.container {
+  max-width: 600px;
+  margin: auto;
+}
+.actions {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  display: flex;
+  gap: .5rem;
+}
+.actions button {
+  min-width: 120px;
+  width: auto;
+}
+header {
+  margin-bottom: 1.5rem;
+}
+h1 {
+  margin: 0;
+}
+button {
+  padding: 6px 12px;
+  border: none;
+  border-radius: 6px;
+  background: #2563eb;
+  color: #fff;
+  cursor: pointer;
+}
+table {
+  border-collapse: collapse;
+  margin-top: 1rem;
+  width: 100%;
+}
+td, th {
+  border: 1px solid #ccc;
+  padding: 4px 8px;
+  text-align: left;
+}
+  </style>
+  <title>NOC2GO</title>
+</head>
+<body>
+
+  <div class="actions">
+    <form action="/passwd" method="get"><button>Change Password</button></form>
+    <form action="/logout" method="post"><button>Logout</button></form>
+  </div>
+
+  <div class="container">
+    <header>
+      <h1>NOC2GO</h1>
+    </header>
+
+    <table>
+      <tr><th>Hostname</th><td>{{ .Hostname }}</td></tr>
+      <tr><th>OS/Arch</th><td>{{ .OS }}</td></tr>
+    </table>
+
+    <div style="margin-top:1rem;">
+      <form action="/info" method="get" style="display:inline"><button>System Info</button></form>
+      <form action="/dns" method="get" style="display:inline"><button>DNS Lookup</button></form>
+    </div>
+  </div>
+
+</body>
+</html>
+{{ end }}

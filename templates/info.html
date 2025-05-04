@@ -1,0 +1,111 @@
+{{ define "info.html" }}
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+body {
+  font-family: sans-serif;
+  margin: 0;
+  padding: 2rem;
+  position: relative;
+}
+.container {
+  max-width: 1000px;
+  margin: auto;
+}
+.actions {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  display: flex;
+  gap: .5rem;
+}
+.actions button {
+  min-width: 120px;
+  width: auto;
+}
+header {
+  margin-bottom: 1.5rem;
+}
+button {
+  padding: 6px 12px;
+  border: none;
+  border-radius: 6px;
+  background: #2563eb;
+  color: #fff;
+  cursor: pointer;
+}
+table {
+  border-collapse: collapse;
+  margin-top: 1rem;
+  width: 100%;
+}
+td, th {
+  border: 1px solid #ccc;
+  padding: 4px 8px;
+  text-align: left;
+  vertical-align: top;
+}
+th {
+  background: #f8f8f8;
+}
+h2 {
+  margin-top: 2rem;
+}
+pre {
+  background: #fafafa;
+  border: 1px solid #eee;
+  padding: 8px;
+  overflow: auto;
+  white-space: pre-wrap;
+}
+  </style>
+  <title>NOC2GO - System Info</title>
+</head>
+<body>
+
+  <div class="actions">
+    <form action="/" method="get"><button>Back</button></form>
+    <form action="/logout" method="post"><button>Logout</button></form>
+  </div>
+
+  <div class="container">
+    <header>
+      <h1>NOC2GO – System Info</h1>
+    </header>
+
+    <table>
+      <tr><th>Hostname</th><td>{{ .Hostname }}</td></tr>
+      <tr><th>OS/Arch</th><td>{{ .OS }}</td></tr>
+      <tr><th>Kernel</th><td>{{ .Kernel }}</td></tr>
+      <tr><th>Uptime</th><td>{{ .Uptime }}</td></tr>
+    </table>
+
+    <h2>Network Interfaces</h2>
+    <table>
+      <tr><th>Name</th><th>MAC</th><th>Addresses</th></tr>
+      {{ range .Interfaces }}
+        <tr>
+          <td>{{ .Name }}</td>
+          <td>{{ .MAC }}</td>
+          <td>{{ range .Addrs }}{{ . }}<br>{{ end }}</td>
+        </tr>
+      {{ end }}
+    </table>
+
+    <h2>Routing Table</h2>
+    <pre>{{ range .Routes }}{{ . }}
+{{ end }}</pre>
+
+    <h2>DNS Servers</h2>
+    <pre>{{ range .DNSServers }}{{ . }}
+{{ end }}</pre>
+
+    <h2>Proxy Settings</h2>
+    <pre>{{ range .Proxies }}{{ . }}
+{{ end }}</pre>
+  </div>
+</body>
+</html>
+{{ end }}
