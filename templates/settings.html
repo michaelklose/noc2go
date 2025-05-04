@@ -1,0 +1,183 @@
+{{ define "settings.html" }}
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+body {
+  font-family: sans-serif;
+  margin: 0;
+  padding: 2rem;
+  position: relative;
+}
+.container {
+  max-width: 600px;
+  margin: auto;
+}
+.actions {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  display: flex;
+  gap: .5rem;
+}
+.actions button {
+  min-width: 120px;
+  width: auto;
+}
+header {
+  margin-bottom: 1.5rem;
+}
+h1 {
+  margin: 0;
+}
+.card {
+  background: #fff;
+  padding: 1.5rem;
+  border-radius: 12px;
+  box-shadow: 0 4px 14px rgba(0,0,0,.1);
+  margin-bottom: 2rem;
+}
+h2 {
+  margin-top: 0;
+}
+ul {
+  list-style: none;
+  padding: 0;
+}
+li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: .4rem 0;
+  border-bottom: 1px solid #eee;
+}
+/* Generic button styling restored */
+button {
+  padding: 6px 12px;
+  border: none;
+  border-radius: 6px;
+  background: #2563eb;
+  color: #fff;
+  cursor: pointer;
+}
+/* Make remove buttons stand out */
+.remove-btn {
+  background: #ef4444;
+}
+.add-container {
+  display: flex;
+  gap: .5rem;
+  margin-top: .5rem;
+}
+.add-container input {
+  flex: 1;
+  padding: .6rem .8rem;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 1rem;
+}
+.err {
+  color: #dc2626;
+  margin-top: .5rem;
+}
+  </style>
+  <title>NOC2GO – Settings</title>
+</head>
+<body>
+
+  <div class="actions">
+    <form action="/" method="get"><button>Back</button></form>
+    <form action="/logout" method="post"><button>Logout</button></form>
+  </div>
+
+  <div class="container">
+    <header>
+      <h1>Settings</h1>
+    </header>
+
+    <div class="card">
+      <h2>Account</h2>
+      <form action="/passwd" method="get">
+        <button>Change Password</button>
+      </form>
+    </div>
+
+    <div class="card">
+      <h2>Custom DNS Servers</h2>
+      <ul id="dns-list">
+        {{ range . }}
+        <li>
+          <span>{{ . }}</span>
+          <button class="remove-btn" data-server="{{ . }}">Remove</button>
+        </li>
+        {{ end }}
+      </ul>
+
+      <div class="add-container">
+        <input id="new-server" placeholder="e.g. 1.1.1.1 or 1.1.1.1:5353" required>
+        <button id="add-btn" type="button">Add</button>
+      </div>
+      <div id="dns-error" class="err"></div>
+    </div>
+  </div>
+
+  <script>
+    const listEl = document.getElementById('dns-list');
+    const errEl = document.getElementById('dns-error');
+    const addBtn = document.getElementById('add-btn');
+    const newServerInput = document.getElementById('new-server');
+
+    function refreshList(servers) {
+      listEl.innerHTML = '';
+      servers.forEach(s => {
+        const li = document.createElement('li');
+        const span = document.createElement('span');
+        span.textContent = s;
+        const btn = document.createElement('button');
+        btn.textContent = 'Remove';
+        btn.dataset.server = s;
+        btn.className = 'remove-btn';
+        li.append(span, btn);
+        listEl.appendChild(li);
+      });
+    }
+
+    listEl.addEventListener('click', async e => {
+      if (!e.target.matches('.remove-btn')) return;
+      const server = e.target.dataset.server;
+      const res = await fetch('/api/settings/dns/remove', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({server})
+      });
+      const data = await res.json();
+      if (data.success) {
+        refreshList(data.servers);
+        errEl.textContent = '';
+      } else {
+        errEl.textContent = data.error;
+      }
+    });
+
+    addBtn.addEventListener('click', async () => {
+      const server = newServerInput.value;
+      const res = await fetch('/api/settings/dns/add', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({server})
+      });
+      const data = await res.json();
+      if (data.success) {
+        refreshList(data.servers);
+        errEl.textContent = '';
+        newServerInput.value = '';
+      } else {
+        errEl.textContent = data.error;
+      }
+    });
+  </script>
+
+</body>
+</html>
+{{ end }}

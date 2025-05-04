@@ -52,14 +52,13 @@ type filterWriter struct {
 
 func (fw *filterWriter) Write(p []byte) (n int, err error) {
 	if bytes.Contains(p, []byte("tls: unknown certificate")) {
-		// pretend we wrote it, but drop it
+		// swallow these
 		return len(p), nil
 	}
 	return fw.dst.Write(p)
 }
 
 func main() {
-	// allow repeated --dns-server flags
 	flag.Var(&dnsServersFlag, "dns-server", "DNS server to use (can specify multiple times, format IP or IP[:port])")
 	flag.Parse()
 
@@ -73,10 +72,8 @@ func main() {
 		log.Fatalf("config error: %v", err)
 	}
 
-	// if CLI dns-server flags provided, dedupe and append them to existing custom servers
+	// merge any CLI --dns-server flags
 	if len(dnsServersFlag) > 0 {
-		// Deduplicate CLI-provided DNS servers, but only for those using port 53
-		// 1) Record existing port-53 servers
 		existing53 := make(map[string]bool)
 		for _, srv := range cfg.DNS.CustomServers {
 			if !strings.Contains(srv, ":") {
@@ -84,19 +81,16 @@ func main() {
 			} else {
 				parts := strings.Split(srv, ":")
 				host := strings.Join(parts[:len(parts)-1], ":")
-				port := parts[len(parts)-1]
-				if port == "53" {
+				if parts[len(parts)-1] == "53" {
 					existing53[host+":53"] = true
 				}
 			}
 		}
-		// 2) Deduplicate within CLI flags and against existing
 		cli53Seen := make(map[string]bool)
 		cliNon53Seen := make(map[string]bool)
 		var toAdd []string
 		for _, srv := range dnsServersFlag {
 			if !strings.Contains(srv, ":") {
-				// Implicit port 53
 				norm := srv + ":53"
 				if existing53[norm] || cli53Seen[norm] {
 					continue
@@ -105,10 +99,8 @@ func main() {
 				toAdd = append(toAdd, norm)
 			} else {
 				parts := strings.Split(srv, ":")
-				host := strings.Join(parts[:len(parts)-1], ":")
-				port := parts[len(parts)-1]
+				host, port := strings.Join(parts[:len(parts)-1], ":"), parts[len(parts)-1]
 				if port == "53" {
-					// Explicit port 53
 					norm := host + ":53"
 					if existing53[norm] || cli53Seen[norm] {
 						continue
@@ -116,7 +108,6 @@ func main() {
 					cli53Seen[norm] = true
 					toAdd = append(toAdd, norm)
 				} else {
-					// Non-53 port: only dedupe exact repeats in the CLI list
 					if cliNon53Seen[srv] {
 						continue
 					}
@@ -155,6 +146,11 @@ func main() {
 	mux.HandleFunc("/dns", dnsPageHandler(cfg))
 	mux.HandleFunc("/api/dns", apiDNSHandler)
 
+	// settings endpoints (handlers in settings.go)
+	mux.HandleFunc("/settings", settingsPageHandler(cfg))
+	mux.HandleFunc("/api/settings/dns/add", apiAddDNSServerHandler(cfg))
+	mux.HandleFunc("/api/settings/dns/remove", apiRemoveDNSServerHandler(cfg))
+
 	handler := authMiddleware(mux, cfg)
 
 	srv := &http.Server{
@@ -162,8 +158,7 @@ func main() {
 		Handler: handler,
 		ErrorLog: log.New(
 			&filterWriter{dst: os.Stderr},
-			"", // no prefix
-			log.LstdFlags,
+			"", log.LstdFlags,
 		),
 		TLSConfig: &tls.Config{MinVersion: tls.VersionTLS12},
 	}
