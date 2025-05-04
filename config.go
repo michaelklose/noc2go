@@ -34,6 +34,9 @@ type Config struct {
 	Tools struct {
 		AllowPrivileged bool `yaml:"allow_privileged"`
 	} `yaml:"tools"`
+	DNS struct {
+		CustomServers []string `yaml:"custom_servers"`
+	} `yaml:"dns,omitempty"`
 }
 
 func defaultConfig(port int, pw string) *Config {

@@ -5,12 +5,16 @@
 package main
 
 import (
+	"bytes"
 	"crypto/tls"
 	"flag"
 	"fmt"
 	"html/template"
+	"io"
 	"log"
 	"net/http"
+	"os"
+	"strings"
 )
 
 var (
@@ -22,13 +26,41 @@ var (
 	templates = template.Must(template.ParseGlob("templates/*.html"))
 )
 
+// multiFlag allows repeated --dns-server flags
+type multiFlag []string
+
+func (m *multiFlag) String() string {
+	return strings.Join(*m, ",")
+}
+
+func (m *multiFlag) Set(value string) error {
+	*m = append(*m, value)
+	return nil
+}
+
+var dnsServersFlag multiFlag
+
 const (
 	defaultPort = 8443
 	certFile    = "noc2go.pem"
 	keyFile     = "noc2go.key"
 )
 
+type filterWriter struct {
+	dst io.Writer
+}
+
+func (fw *filterWriter) Write(p []byte) (n int, err error) {
+	if bytes.Contains(p, []byte("tls: unknown certificate")) {
+		// pretend we wrote it, but drop it
+		return len(p), nil
+	}
+	return fw.dst.Write(p)
+}
+
 func main() {
+	// allow repeated --dns-server flags
+	flag.Var(&dnsServersFlag, "dns-server", "DNS server to use (can specify multiple times, format IP or IP[:port])")
 	flag.Parse()
 
 	port := choosePort(*portFlag)
@@ -39,6 +71,14 @@ func main() {
 	cfg, err := loadOrInitConfig(*cfgPath, port, *password)
 	if err != nil {
 		log.Fatalf("config error: %v", err)
+	}
+
+	// if CLI dns-server flags provided, append them to existing custom servers
+	if len(dnsServersFlag) > 0 {
+		cfg.DNS.CustomServers = append(cfg.DNS.CustomServers, dnsServersFlag...)
+		if err := saveConfig(*cfgPath, cfg); err != nil {
+			log.Fatalf("cannot save config: %v", err)
+		}
 	}
 
 	ip := firstNonLoopbackIP()
@@ -62,14 +102,19 @@ func main() {
 	mux.HandleFunc("/passwd", handleChangePassword(cfg))
 	mux.HandleFunc("/", rootHandler)
 	mux.HandleFunc("/info", infoHandler)
-	mux.HandleFunc("/dns", dnsPageHandler)
+	mux.HandleFunc("/dns", dnsPageHandler(cfg))
 	mux.HandleFunc("/api/dns", apiDNSHandler)
 
 	handler := authMiddleware(mux, cfg)
 
 	srv := &http.Server{
-		Addr:      fmt.Sprintf(":%d", cfg.Server.Port),
-		Handler:   handler,
+		Addr:    fmt.Sprintf(":%d", cfg.Server.Port),
+		Handler: handler,
+		ErrorLog: log.New(
+			&filterWriter{dst: os.Stderr},
+			"", // no prefix
+			log.LstdFlags,
+		),
 		TLSConfig: &tls.Config{MinVersion: tls.VersionTLS12},
 	}
 
@@ -81,10 +126,4 @@ func rootHandler(w http.ResponseWriter, r *http.Request) {
 	info := collectSysInfo()
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	templates.ExecuteTemplate(w, "index.html", info)
-}
-
-// dnsPageHandler renders the DNS lookup page via template
-func dnsPageHandler(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	templates.ExecuteTemplate(w, "dns.html", nil)
 }

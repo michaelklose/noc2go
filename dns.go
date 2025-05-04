@@ -9,6 +9,8 @@ import (
 	"sync"
 	"time"
 
+	"strconv"
+
 	"github.com/miekg/dns"
 )
 
@@ -28,69 +30,115 @@ type cacheEntry struct {
 	err       error
 }
 
-// apiDNSHandler handles GET /api/dns?name=...&type=...
+// page data for template
+type dnsPageData struct {
+	CustomServers []string
+}
+
+// dnsPageHandler renders GET /dns
+func dnsPageHandler(cfg *Config) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		data := dnsPageData{
+			CustomServers: cfg.DNS.CustomServers,
+		}
+		templates.ExecuteTemplate(w, "dns.html", data)
+	}
+}
+
+// apiDNSHandler handles GET /api/dns?name=...&type=...&server=...
 func apiDNSHandler(w http.ResponseWriter, r *http.Request) {
 	name := r.URL.Query().Get("name")
 	typ := strings.ToUpper(r.URL.Query().Get("type"))
+	serverParam := r.URL.Query().Get("server")
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	if name == "" || typ == "" {
 		fmt.Fprint(w, `{"error":"name and type are required"}`)
 		return
 	}
 
-	records, err := lookupDNS(name, typ)
+	records, serverUsed, err := lookupDNS(name, typ, serverParam)
 	if err != nil {
 		fmt.Fprintf(w, `{"error":%q}`, err.Error())
 		return
 	}
-	fmt.Fprint(w, `{"records":`)
-	data, _ := json.Marshal(records)
-	w.Write(data)
-	fmt.Fprint(w, `}`)
+	resp := map[string]interface{}{
+		"server":  serverUsed,
+		"records": records,
+	}
+	data, _ := json.Marshal(resp)
+	fmt.Fprint(w, string(data))
 }
 
-// lookupDNS does the actual query (with caching and timeout)
-func lookupDNS(name, typ string) (interface{}, error) {
-	key := strings.ToLower(name + "|" + typ)
+// lookupDNS does the actual query (with caching and timeout, override via serverParam)
+func lookupDNS(name, typ, override string) (interface{}, string, error) {
+	lookupName := name
+	if typ == "PTR" {
+		if ip := net.ParseIP(name); ip != nil {
+			lookupName = reverseIP(ip)
+		} else {
+			lower := strings.ToLower(name)
+			if !(strings.HasSuffix(lower, ".in-addr.arpa") || strings.HasSuffix(lower, ".ip6.arpa")) {
+				return nil, "", fmt.Errorf("invalid input for PTR lookup: must be IP or reverse-ARPA domain")
+			}
+		}
+	}
+
+	// choose which DNS server to use
+	var serverUsed string
+	if override != "" && override != "system" {
+		serverUsed = override
+	} else {
+		sys := collectDNSServers()
+		if len(sys) > 0 && sys[0] != "unavailable" {
+			serverUsed = net.JoinHostPort(sys[0], "53")
+		} else {
+			serverUsed = "8.8.8.8:53"
+		}
+	}
+	// ensure host:port
+	if !strings.Contains(serverUsed, ":") {
+		serverUsed = net.JoinHostPort(serverUsed, "53")
+	}
+
+	key := strings.ToLower(lookupName + "|" + typ + "|" + serverUsed)
 	cacheMutex.Lock()
 	if e, ok := dnsCache[key]; ok && time.Since(e.timestamp) < cacheTTL {
 		cacheMutex.Unlock()
-		return e.records, e.err
+		return e.records, serverUsed, e.err
 	}
 	cacheMutex.Unlock()
-
-	// choose DNS server (fallback to Google Public DNS)
-	servers := collectDNSServers()
-	server := "8.8.8.8:53"
-	if len(servers) > 0 && servers[0] != "unavailable" {
-		server = net.JoinHostPort(servers[0], "53")
-	}
 
 	client := new(dns.Client)
 	client.Timeout = dnsTimeout
 	msg := new(dns.Msg)
 	qtype, ok := map[string]uint16{
-		"A": dns.TypeA, "AAAA": dns.TypeAAAA, "MX": dns.TypeMX,
-		"NS": dns.TypeNS, "PTR": dns.TypePTR, "TXT": dns.TypeTXT, "SRV": dns.TypeSRV,
+		"A":    dns.TypeA,
+		"AAAA": dns.TypeAAAA,
+		"MX":   dns.TypeMX,
+		"NS":   dns.TypeNS,
+		"PTR":  dns.TypePTR,
+		"TXT":  dns.TypeTXT,
+		"SRV":  dns.TypeSRV,
 	}[typ]
 	if !ok {
-		return nil, fmt.Errorf("unsupported record type %q", typ)
+		return nil, serverUsed, fmt.Errorf("unsupported record type %q", typ)
 	}
-	msg.SetQuestion(dns.Fqdn(name), qtype)
+	msg.SetQuestion(dns.Fqdn(lookupName), qtype)
 
-	resp, _, err := client.Exchange(msg, server)
+	resp, _, err := client.Exchange(msg, serverUsed)
 	if err != nil {
 		cacheMutex.Lock()
 		dnsCache[key] = cacheEntry{time.Now(), nil, err}
 		cacheMutex.Unlock()
-		return nil, err
+		return nil, serverUsed, err
 	}
 	if resp.Rcode == dns.RcodeNameError {
 		err = fmt.Errorf("NXDOMAIN")
 		cacheMutex.Lock()
 		dnsCache[key] = cacheEntry{time.Now(), nil, err}
 		cacheMutex.Unlock()
-		return nil, err
+		return nil, serverUsed, err
 	}
 
 	var out interface{}
@@ -161,5 +209,26 @@ func lookupDNS(name, typ string) (interface{}, error) {
 	cacheMutex.Lock()
 	dnsCache[key] = cacheEntry{time.Now(), out, nil}
 	cacheMutex.Unlock()
-	return out, nil
+	return out, serverUsed, nil
+}
+
+// reverseIP builds the in-addr or ip6.arpa name for an IP
+func reverseIP(ip net.IP) string {
+	if ip4 := ip.To4(); ip4 != nil {
+		parts := make([]string, 0, 4)
+		for i := len(ip4) - 1; i >= 0; i-- {
+			parts = append(parts, strconv.Itoa(int(ip4[i])))
+		}
+		return strings.Join(parts, ".") + ".in-addr.arpa"
+	}
+	ip16 := ip.To16()
+	var nibbles []string
+	for i := len(ip16) - 1; i >= 0; i-- {
+		b := ip16[i]
+		// low nibble
+		nibbles = append(nibbles, fmt.Sprintf("%x", b&0xF))
+		// high nibble
+		nibbles = append(nibbles, fmt.Sprintf("%x", b>>4))
+	}
+	return strings.Join(nibbles, ".") + ".ip6.arpa"
 }

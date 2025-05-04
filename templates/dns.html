@@ -34,6 +34,11 @@ header {
   border-radius: 12px;
   box-shadow: 0 4px 14px rgba(0,0,0,.1);
 }
+label {
+  display: block;
+  margin-top: 0.5rem;
+  font-weight: 500;
+}
 input, select {
   width: 100%;
   padding: .6rem .8rem;
@@ -67,6 +72,10 @@ th {
   color: #dc2626;
   margin-top: .5rem;
 }
+#server-used {
+  margin-top: .5rem;
+  font-style: italic;
+}
   </style>
   <title>NOC2GO - DNS Lookup</title>
 </head>
@@ -84,7 +93,17 @@ th {
 
     <div class="card">
       <form id="dns-form">
-        <input id="hostname" placeholder="Hostname (e.g. example.com)" required>
+        <label for="dns-server-select">DNS Server</label>
+        <select id="dns-server-select">
+          <option value="system">System</option>
+          {{ range .CustomServers }}
+          <option value="{{ . }}">{{ . }}</option>
+          {{ end }}
+        </select>
+
+        <label for="hostname">Hostname / IP</label>
+        <input id="hostname" placeholder="Hostname (e.g. example.com) or IP for PTR" required>
+
         <select id="record-type">
           <option>A</option><option>AAAA</option><option>MX</option>
           <option>NS</option><option>PTR</option><option>TXT</option><option>SRV</option>
@@ -92,26 +111,36 @@ th {
         <button type="submit">Resolve</button>
       </form>
       <div id="error" class="err"></div>
+      <div id="server-used"></div>
       <table id="result-table"></table>
     </div>
   </div>
 
   <script>
+    const serverSelect = document.getElementById("dns-server-select");
     document.getElementById("dns-form").addEventListener("submit", async e => {
       e.preventDefault();
       const name = document.getElementById("hostname").value;
       const type = document.getElementById("record-type").value;
       const errDiv = document.getElementById("error");
       const table = document.getElementById("result-table");
+      const usedDiv = document.getElementById("server-used");
       errDiv.textContent = "";
+      usedDiv.textContent = "";
       table.innerHTML = "";
 
-      const res = await fetch(`/api/dns?name=${encodeURIComponent(name)}&type=${encodeURIComponent(type)}`);
+      const res = await fetch(
+        `/api/dns?name=${encodeURIComponent(name)}` +
+        `&type=${encodeURIComponent(type)}` +
+        `&server=${encodeURIComponent(serverSelect.value)}`
+      );
       const data = await res.json();
       if (data.error) {
         errDiv.textContent = data.error;
         return;
       }
+      usedDiv.textContent = `Server used: ${data.server}`;
+
       // build headers based on type
       let cols;
       switch(type) {
