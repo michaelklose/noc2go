@@ -41,9 +41,9 @@ th { background: #f8f8f8; }
     </header>
 
     <div class="card">
-      {{ if not .Privileged }}
+      <!-- {{ if not .Privileged }}
         <div class="info">Running in non-privileged mode: raw sockets unavailable; fallback to system ping. Limitations may apply.</div>
-      {{ end }}
+      {{ end }} -->
 
       <label for="target">Target (hostname or IP)</label>
       <input id="target" placeholder="e.g. example.com or 8.8.8.8">
@@ -64,7 +64,7 @@ th { background: #f8f8f8; }
       </select>
 
       <label for="count">Count</label>
-      <input id="count" type="number" min="1" value="4">
+      <input id="count" type="number" min="1" value="5">
 
       <label for="size">Packet Size (bytes)</label>
       <input id="size" type="number" min="32" max="65535" value="64">
@@ -127,7 +127,7 @@ th { background: #f8f8f8; }
   saveBtn.addEventListener('click', async () => {
     const tgt = targetInput.value.trim();
     if (!tgt) return;
-    const res = await fetch('/api/ping/save', {
+    const res = await fetch('/api/settings/ping/add', {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
       body: JSON.stringify({target:tgt})

@@ -133,7 +133,7 @@ func main() {
 	} else {
 		fmt.Printf("[NOC2GO]   LOGIN  : use credentials from %s\n", *cfgPath)
 	}
-	fmt.Printf("[NOC2GO]   MODE   : %s\n\n", ternary(isPrivileged, "privileged", "user"))
+	// fmt.Printf("[NOC2GO]   MODE   : %s\n\n", ternary(isPrivileged, "privileged", "user"))
 
 	if !fileExists(certFile) || !fileExists(keyFile) {
 		if err := generateSelfSigned(certFile, keyFile); err != nil {
@@ -141,6 +141,7 @@ func main() {
 		}
 	}
 
+	// HTTP handlers
 	mux := http.NewServeMux()
 	mux.HandleFunc("/login", handleLogin(cfg))
 	mux.HandleFunc("/logout", handleLogout())
@@ -150,15 +151,16 @@ func main() {
 	mux.HandleFunc("/dns", dnsPageHandler(cfg))
 	mux.HandleFunc("/api/dns", apiDNSHandler)
 
-	// settings endpoints
+	// settings
 	mux.HandleFunc("/settings", settingsPageHandler(cfg))
 	mux.HandleFunc("/api/settings/dns/add", apiAddDNSServerHandler(cfg))
 	mux.HandleFunc("/api/settings/dns/remove", apiRemoveDNSServerHandler(cfg))
+	mux.HandleFunc("/api/settings/ping/add", apiAddPingTargetHandler(cfg))
+	mux.HandleFunc("/api/settings/ping/remove", apiRemovePingTargetHandler(cfg))
 
-	// new Ping page and APIs
+	// ping
 	mux.HandleFunc("/ping", pingPageHandler(cfg))
 	mux.HandleFunc("/api/ping", apiPingHandler)
-	mux.HandleFunc("/api/ping/save", apiSavePingTargetHandler(cfg))
 
 	handler := authMiddleware(mux, cfg)
 

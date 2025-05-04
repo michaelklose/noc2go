@@ -2,7 +2,6 @@ package main
 
 import (
 	"bufio"
-	"encoding/json"
 	"fmt"
 	"net"
 	"net/http"
@@ -26,31 +25,6 @@ func pingPageHandler(cfg *Config) http.HandlerFunc {
 			cfg.Ping.Targets,
 		}
 		templates.ExecuteTemplate(w, "ping.html", data)
-	}
-}
-
-// Save a target into config (deduped)
-func apiSavePingTargetHandler(cfg *Config) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		var req struct {
-			Target string `json:"target"`
-		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, "bad request", http.StatusBadRequest)
-			return
-		}
-		t := strings.TrimSpace(req.Target)
-		for _, v := range cfg.Ping.Targets {
-			if v == t {
-				// already present
-				json.NewEncoder(w).Encode(map[string]interface{}{"success": true, "targets": cfg.Ping.Targets})
-				return
-			}
-		}
-		cfg.Ping.Targets = append(cfg.Ping.Targets, t)
-		saveConfig(*cfgPath, cfg)
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{"success": true, "targets": cfg.Ping.Targets})
 	}
 }
 
