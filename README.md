@@ -93,7 +93,7 @@ The output binary is fully static on Linux (`CGO_ENABLED=0` by default) and cont
 | `--config` | `noc2go.yaml` | Path to YAML config file. |
 | `--port` | _auto‑select_ | HTTPS port. `0` = pick default (8443) or next free. |
 | `--password` | _(random on first run)_ | Admin password seed when generating a fresh config. |
-| `--privileged` | `false` | Enable raw‑socket features (needs root/Administrator). |
+| `--privileged` | `false` | Enable raw‑socket features (needs root/Administrator). (coming soon)|
 | `--dns-server` | _none_ | Additional upstream resolver(s). Can be specified multiple times. |
 
 ---
@@ -104,9 +104,9 @@ Got an idea—or spotted a bug 🐞? PRs and issues are warmly welcomed!
 
 1. Fork → hack → commit (use conventional commits if you can)  
 2. `go test ./...` (tests coming soon)  
-3. Open a pull request—CI will run `go vet`, `go test`, and linting.
+3. Open a pull request—CI will run `go vet`, `go test`, and linting. (coming soon)
 
-Please read our brief [Code of Conduct](CODE_OF_CONDUCT.md) before diving in.
+<!-- Please read our brief [Code of Conduct](CODE_OF_CONDUCT.md) before diving in. -->
 
 ---
 
