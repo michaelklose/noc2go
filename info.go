@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
 	"net"
 	"net/http"
 	"os"
@@ -38,7 +37,7 @@ type sysInfo struct {
 func collectSysInfo() sysInfo {
 	host, _ := os.Hostname()
 	kernel := runtime.GOOS
-	if data, err := ioutil.ReadFile("/proc/sys/kernel/osrelease"); err == nil {
+	if data, err := os.ReadFile("/proc/sys/kernel/osrelease"); err == nil {
 		kernel = strings.TrimSpace(string(data))
 	}
 	up := systemUptime()
@@ -85,7 +84,7 @@ func collectRoutes() []string {
 }
 
 func collectDNSServers() []string {
-	if data, err := ioutil.ReadFile("/etc/resolv.conf"); err == nil {
+	if data, err := os.ReadFile("/etc/resolv.conf"); err == nil {
 		var servers []string
 		for _, l := range strings.Split(string(data), "\n") {
 			f := strings.Fields(l)
